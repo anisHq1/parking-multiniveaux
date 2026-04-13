@@ -1,38 +1,94 @@
-import { useState } from 'react';
-import { useAuth } from '../context/AuthContext';
-import { useNavigate } from 'react-router-dom';
+import { useState } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
+import { useAuth } from '../context/AuthContext'
 
 export default function Register() {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [fullName, setFullName] = useState('');
-  const [phone, setPhone] = useState('');
-  const [error, setError] = useState('');
-  const { register } = useAuth();
-  const navigate = useNavigate();
+  const { register } = useAuth()
+  const navigate     = useNavigate()
+  const [form, setForm] = useState({
+    prenom: '', nom: '', telephone: '', email: '', password: ''
+  })
+  const [error,   setError]   = useState('')
+  const [loading, setLoading] = useState(false)
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    try {
-      await register(email, password, fullName, phone);
-      navigate('/dashboard');
-    } catch (err) {
-      setError(err.response?.data?.message || "Erreur d'inscription");
+  const handle = e => setForm({ ...form, [e.target.name]: e.target.value })
+
+  const submit = async e => {
+    e.preventDefault()
+    setError('')
+    if (form.password.length < 6) {
+      setError('Le mot de passe doit contenir au moins 6 caractères')
+      return
     }
-  };
+    setLoading(true)
+    try {
+      await register(form)
+      navigate('/dashboard')
+    } catch (err) {
+      setError(err.response?.data?.error || "Erreur lors de l'inscription")
+    } finally {
+      setLoading(false)
+    }
+  }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-100">
-      <form onSubmit={handleSubmit} className="bg-white p-6 rounded shadow-md w-96">
-        <h2 className="text-2xl font-bold mb-4">Inscription</h2>
-        {error && <p className="text-red-500 mb-2">{error}</p>}
-        <input type="email" placeholder="Email" className="input mb-2" value={email} onChange={(e) => setEmail(e.target.value)} required />
-        <input type="password" placeholder="Mot de passe" className="input mb-2" value={password} onChange={(e) => setPassword(e.target.value)} required />
-        <input type="text" placeholder="Nom complet" className="input mb-2" value={fullName} onChange={(e) => setFullName(e.target.value)} />
-        <input type="tel" placeholder="Téléphone" className="input mb-4" value={phone} onChange={(e) => setPhone(e.target.value)} />
-        <button type="submit" className="btn btn-primary w-full">S'inscrire</button>
-        <p className="mt-4 text-center">Déjà un compte ? <a href="/login" className="text-primary">Connexion</a></p>
-      </form>
+    <div className="auth-page">
+      <div className="auth-card">
+        <div className="auth-logo">
+          <div className="logo-box">P</div>
+          <div>
+            <div className="logo-title">ParkFlow</div>
+            <div className="logo-sub">SMART PARKING</div>
+          </div>
+        </div>
+
+        <div className="auth-tabs">
+          <Link to="/login"    className="auth-tab">Connexion</Link>
+          <Link to="/register" className="auth-tab active">Inscription</Link>
+        </div>
+
+        <p className="auth-subtitle">
+          Inscris-toi pour réserver une place et gérer tes véhicules.
+        </p>
+
+        {error && <div className="alert alert-error">{error}</div>}
+
+        <form onSubmit={submit}>
+          <div className="form-row-2">
+            <div className="form-group">
+              <label>Prénom</label>
+              <input name="prenom" value={form.prenom} onChange={handle} placeholder="Jean" required />
+            </div>
+            <div className="form-group">
+              <label>Nom</label>
+              <input name="nom" value={form.nom} onChange={handle} placeholder="Dupont" required />
+            </div>
+          </div>
+          <div className="form-group">
+            <label>Téléphone (optionnel)</label>
+            <input name="telephone" value={form.telephone} onChange={handle} placeholder="514-555-0100" />
+          </div>
+          <div className="form-group">
+            <label>Email</label>
+            <input type="email" name="email" value={form.email} onChange={handle} placeholder="jean@example.com" required />
+          </div>
+          <div className="form-group">
+            <label>Mot de passe</label>
+            <input
+              type="password" name="password"
+              value={form.password} onChange={handle}
+              placeholder="Minimum 6 caractères" minLength={6} required
+            />
+          </div>
+          <button type="submit" className="btn-primary btn-full" disabled={loading}>
+            {loading ? 'Création...' : 'Créer le compte'}
+          </button>
+        </form>
+
+        <p className="auth-hint">
+          Déjà un compte ? <Link to="/login">Se connecter</Link>
+        </p>
+      </div>
     </div>
-  );
+  )
 }

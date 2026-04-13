@@ -1,69 +1,130 @@
--- USERS
+-- =====================================================
+-- ParkFlow — Schéma PostgreSQL complet
+-- Exécuter : psql -U postgres -d parking_db -f init.sql
+-- =====================================================
+
+-- Extension UUID (optionnel)
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+
+-- ── Table users ──────────────────────────────────────
 CREATE TABLE IF NOT EXISTS users (
-  id SERIAL PRIMARY KEY,
-  first_name TEXT NOT NULL,
-  last_name TEXT NOT NULL,
-  phone TEXT,
-  email TEXT UNIQUE NOT NULL,
-  password_hash TEXT NOT NULL,
-  role TEXT NOT NULL DEFAULT 'user' CHECK (role IN ('user','admin')),
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  id            SERIAL PRIMARY KEY,
+  prenom        VARCHAR(100) NOT NULL,
+  nom           VARCHAR(100) NOT NULL,
+  email         VARCHAR(255) UNIQUE NOT NULL,
+  telephone     VARCHAR(25),
+  password_hash VARCHAR(255) NOT NULL,
+  role          VARCHAR(20) NOT NULL DEFAULT 'user'
+                  CHECK (role IN ('admin','user')),
+  created_at    TIMESTAMP DEFAULT NOW()
 );
 
--- VEHICLES
+-- ── Table vehicles ───────────────────────────────────
 CREATE TABLE IF NOT EXISTS vehicles (
-  id SERIAL PRIMARY KEY,
-  user_id INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  model TEXT NOT NULL,
-  color TEXT NOT NULL,
-  plate TEXT NOT NULL,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  id                SERIAL PRIMARY KEY,
+  user_id           INTEGER REFERENCES users(id) ON DELETE CASCADE,
+  license_plate     VARCHAR(20) UNIQUE NOT NULL,
+  brand             VARCHAR(100) NOT NULL,
+  model             VARCHAR(100) NOT NULL,
+  color             VARCHAR(60)  NOT NULL,
+  subscription_type VARCHAR(20) NOT NULL DEFAULT 'none'
+                      CHECK (subscription_type IN ('none','mensuel','annuel')),
+  created_at        TIMESTAMP DEFAULT NOW()
 );
 
--- FLOORS
-CREATE TABLE IF NOT EXISTS floors (
-  id SERIAL PRIMARY KEY,
-  floor_number INT NOT NULL UNIQUE
+-- ── Table parking_spots ──────────────────────────────
+CREATE TABLE IF NOT EXISTS parking_spots (
+  id          SERIAL PRIMARY KEY,
+  floor       INTEGER NOT NULL CHECK (floor BETWEEN 1 AND 4),
+  spot_number INTEGER NOT NULL CHECK (spot_number BETWEEN 1 AND 25),
+  zone        VARCHAR(5) NOT NULL,
+  spot_type   VARCHAR(20) NOT NULL DEFAULT 'standard'
+                CHECK (spot_type IN ('standard','vip','handicap','electrique')),
+  status      VARCHAR(20) NOT NULL DEFAULT 'libre'
+                CHECK (status IN ('libre','occupee','reservee','maintenance')),
+  UNIQUE (floor, spot_number)
 );
 
--- SPOTS
-CREATE TABLE IF NOT EXISTS spots (
-  id SERIAL PRIMARY KEY,
-  floor_id INT NOT NULL REFERENCES floors(id) ON DELETE CASCADE,
-  spot_number INT NOT NULL,
-  status TEXT NOT NULL DEFAULT 'free' CHECK (status IN ('free','occupied')),
-  UNIQUE(floor_id, spot_number)
+-- ── Table sessions ───────────────────────────────────
+CREATE TABLE IF NOT EXISTS sessions (
+  id               SERIAL PRIMARY KEY,
+  vehicle_id       INTEGER REFERENCES vehicles(id) ON DELETE SET NULL,
+  spot_id          INTEGER REFERENCES parking_spots(id),
+  entry_time       TIMESTAMP NOT NULL DEFAULT NOW(),
+  exit_time        TIMESTAMP,
+  planned_duration INTEGER   NOT NULL DEFAULT 2,   -- heures prévues
+  amount           NUMERIC(10,2),
+  status           VARCHAR(20) NOT NULL DEFAULT 'active'
+                     CHECK (status IN ('active','completed','cancelled')),
+  payment_status   VARCHAR(20) NOT NULL DEFAULT 'pending'
+                     CHECK (payment_status IN ('pending','paid','cancelled'))
 );
 
--- RESERVATIONS
+-- ── Table reservations ───────────────────────────────
 CREATE TABLE IF NOT EXISTS reservations (
-  id SERIAL PRIMARY KEY,
-  vehicle_id INT NOT NULL REFERENCES vehicles(id) ON DELETE CASCADE,
-  spot_id INT NOT NULL REFERENCES spots(id),
-  start_time TIMESTAMPTZ NOT NULL,
-  end_time TIMESTAMPTZ NOT NULL,
-  price_estimated NUMERIC(10,2) NOT NULL DEFAULT 0,
-  status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active','completed')),
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  id         SERIAL PRIMARY KEY,
+  vehicle_id INTEGER REFERENCES vehicles(id) ON DELETE CASCADE,
+  spot_id    INTEGER REFERENCES parking_spots(id),
+  start_time TIMESTAMP NOT NULL,
+  end_time   TIMESTAMP NOT NULL,
+  status     VARCHAR(20) NOT NULL DEFAULT 'active'
+               CHECK (status IN ('active','cancelled','completed')),
+  created_at TIMESTAMP DEFAULT NOW()
 );
 
--- LOGS
-CREATE TABLE IF NOT EXISTS logs (
-  id SERIAL PRIMARY KEY,
-  spot_id INT NOT NULL REFERENCES spots(id),
-  reservation_id INT REFERENCES reservations(id) ON DELETE SET NULL,
-  action TEXT NOT NULL CHECK (action IN ('entry','exit')),
-  action_time TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
+-- =====================================================
+-- SEED : Générer les 100 places (4 étages × 25)
+-- =====================================================
+DO $$
+DECLARE
+  f INT; s INT;
+  z VARCHAR(5); t VARCHAR(20);
+BEGIN
+  FOR f IN 1..4 LOOP
+    FOR s IN 1..25 LOOP
+      -- Zone : A=1-5, B=6-10, C=11-15, D=16-20, E=21-25
+      z := CASE
+        WHEN s <= 5  THEN 'A'
+        WHEN s <= 10 THEN 'B'
+        WHEN s <= 15 THEN 'C'
+        WHEN s <= 20 THEN 'D'
+        ELSE 'E'
+      END;
+      -- Type spécial pour quelques places
+      t := CASE
+        WHEN s % 7  = 0 THEN 'vip'
+        WHEN s % 5  = 0 THEN 'handicap'
+        WHEN s % 11 = 0 THEN 'electrique'
+        ELSE 'standard'
+      END;
+      INSERT INTO parking_spots (floor, spot_number, zone, spot_type, status)
+      VALUES (f, s, z, t, 'libre')
+      ON CONFLICT (floor, spot_number) DO NOTHING;
+    END LOOP;
+  END LOOP;
+END $$;
 
--- Seed floors (1..4)
-INSERT INTO floors (floor_number)
-SELECT gs FROM generate_series(1,4) gs
-ON CONFLICT (floor_number) DO NOTHING;
+-- =====================================================
+-- SEED : Admin par défaut  (mot de passe : admin123)
+-- Hash bcrypt généré avec saltRounds=10
+-- =====================================================
+INSERT INTO users (prenom, nom, email, telephone, password_hash, role)
+VALUES (
+  'Admin', 'ParkFlow',
+  'admin@parkflow.com',
+  '514-000-0000',
+  '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWC',
+  'admin'
+)
+ON CONFLICT (email) DO NOTHING;
 
--- Seed spots: 25 par étage
-INSERT INTO spots (floor_id, spot_number, status)
-SELECT f.id, s.spot_number, 'free'
-FROM floors f
-CROSS JOIN (SELECT generate_series(1,25) AS spot_number) s
-ON CONFLICT (floor_id, spot_number) DO NOTHING;
+-- =====================================================
+-- Index pour performances
+-- =====================================================
+CREATE INDEX IF NOT EXISTS idx_sessions_vehicle  ON sessions(vehicle_id);
+CREATE INDEX IF NOT EXISTS idx_sessions_spot     ON sessions(spot_id);
+CREATE INDEX IF NOT EXISTS idx_sessions_status   ON sessions(status);
+CREATE INDEX IF NOT EXISTS idx_vehicles_plate    ON vehicles(license_plate);
+CREATE INDEX IF NOT EXISTS idx_vehicles_user     ON vehicles(user_id);
+CREATE INDEX IF NOT EXISTS idx_spots_floor       ON parking_spots(floor);
+CREATE INDEX IF NOT EXISTS idx_spots_status      ON parking_spots(status);

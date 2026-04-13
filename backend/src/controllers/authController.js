@@ -1,56 +1,69 @@
-const bcrypt = require('bcrypt');
-const jwt = require('jsonwebtoken');
-const pool = require('../config/db');
+const bcrypt    = require('bcryptjs');
+const jwt       = require('jsonwebtoken');
+const UserModel = require('../models/userModel');
 
-// Inscription
+const signToken = (id) =>
+  jwt.sign({ id }, process.env.JWT_SECRET, { expiresIn: process.env.JWT_EXPIRES_IN || '7d' });
+
 exports.register = async (req, res) => {
-  const { email, password, full_name, phone } = req.body;
-  if (!email || !password) {
-    return res.status(400).json({ message: 'Email et mot de passe requis' });
-  }
   try {
-    // Vérifier si l'utilisateur existe déjà
-    const existing = await pool.query('SELECT id FROM users WHERE email = $1', [email]);
-    if (existing.rows.length > 0) {
-      return res.status(400).json({ message: 'Cet email est déjà utilisé' });
-    }
-    // Hachage du mot de passe
-    const hashedPassword = await bcrypt.hash(password, 10);
-    // Insertion
-    const result = await pool.query(
-      'INSERT INTO users (email, password_hash, full_name, phone, role) VALUES ($1, $2, $3, $4, $5) RETURNING id, email, role',
-      [email, hashedPassword, full_name || null, phone || null, 'user']
-    );
-    const user = result.rows[0];
-    // Génération du token JWT
-    const token = jwt.sign({ id: user.id, role: user.role }, process.env.JWT_SECRET, { expiresIn: '24h' });
-    res.status(201).json({ token, user: { id: user.id, email: user.email, role: user.role } });
+    console.log('Register body:', req.body);
+    const first_name = req.body.first_name || req.body.prenom || '';
+    const last_name  = req.body.last_name  || req.body.nom   || '';
+    const email      = req.body.email      || '';
+    const password   = req.body.password   || '';
+    const phone      = req.body.phone || req.body.telephone || null;
+
+    if (!first_name || !last_name || !email || !password)
+      return res.status(400).json({ error: 'Champs obligatoires manquants' });
+
+    if (password.length < 6)
+      return res.status(400).json({ error: 'Mot de passe : 6 caractères minimum' });
+
+    const exists = await UserModel.findByEmail(email);
+    if (exists.rows.length)
+      return res.status(409).json({ error: 'Email déjà utilisé' });
+
+    const password_hash = await bcrypt.hash(password, 10);
+    const { rows } = await UserModel.create({ first_name, last_name, email, phone, password_hash });
+
+    const token = signToken(rows[0].id);
+    res.status(201).json({ user: rows[0], token });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: 'Erreur serveur' });
+    console.error('register:', err.message);
+    res.status(500).json({ error: 'Erreur serveur' });
   }
 };
 
-// Connexion
 exports.login = async (req, res) => {
-  const { email, password } = req.body;
-  if (!email || !password) {
-    return res.status(400).json({ message: 'Email et mot de passe requis' });
-  }
   try {
-    const result = await pool.query('SELECT id, email, password_hash, role FROM users WHERE email = $1', [email]);
-    if (result.rows.length === 0) {
-      return res.status(401).json({ message: 'Email ou mot de passe incorrect' });
-    }
-    const user = result.rows[0];
+    const { email, password } = req.body;
+    if (!email || !password)
+      return res.status(400).json({ error: 'Email et mot de passe requis' });
+
+    const { rows } = await UserModel.findByEmail(email);
+    if (!rows.length)
+      return res.status(401).json({ error: 'Identifiants invalides' });
+
+    const user  = rows[0];
     const valid = await bcrypt.compare(password, user.password_hash);
-    if (!valid) {
-      return res.status(401).json({ message: 'Email ou mot de passe incorrect' });
-    }
-    const token = jwt.sign({ id: user.id, role: user.role }, process.env.JWT_SECRET, { expiresIn: '24h' });
-    res.json({ token, user: { id: user.id, email: user.email, role: user.role } });
+    if (!valid)
+      return res.status(401).json({ error: 'Identifiants invalides' });
+
+    const token = signToken(user.id);
+    const { password_hash, ...safeUser } = user;
+    res.json({ user: safeUser, token });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: 'Erreur serveur' });
+    console.error('login:', err.message);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+};
+
+exports.getMe = async (req, res) => {
+  try {
+    const { rows } = await UserModel.findById(req.user.id);
+    res.json({ user: rows[0] });
+  } catch (err) {
+    res.status(500).json({ error: 'Erreur serveur' });
   }
 };

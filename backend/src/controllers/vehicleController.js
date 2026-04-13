@@ -1,31 +1,73 @@
-const pool = require('../config/db');
+const VehicleModel = require('../models/vehicleModel');
 
-exports.getVehicles = async (req, res) => {
+exports.create = async (req, res) => {
   try {
-    const result = await pool.query('SELECT * FROM vehicles WHERE user_id = $1', [req.user.id]);
-    res.json(result.rows);
+    console.log('Body reçu:', req.body);
+    const plate = (req.body.plate || req.body.license_plate || '').toString().trim();
+    const model = req.body.model || '';
+    const color = req.body.color || '';
+
+    if (!plate || !model || !color)
+      return res.status(400).json({ error: 'plate, model et color sont requis' });
+
+    const dup = await VehicleModel.findByPlate(plate);
+    if (dup.rows.length)
+      return res.status(409).json({ error: 'Plaque déjà enregistrée' });
+
+    const { rows } = await VehicleModel.create({
+      user_id: req.user.id,
+      plate,
+      model,
+      color,
+    });
+    res.status(201).json(rows[0]);
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: 'Erreur serveur' });
+    console.error('vehicle.create:', err.message);
+    res.status(500).json({ error: 'Erreur serveur' });
   }
 };
 
-exports.addVehicle = async (req, res) => {
-  const { license_plate, model, color } = req.body;
-  if (!license_plate) {
-    return res.status(400).json({ message: 'La plaque d’immatriculation est requise' });
-  }
+exports.getAll = async (req, res) => {
   try {
-    const result = await pool.query(
-      'INSERT INTO vehicles (user_id, license_plate, model, color) VALUES ($1, $2, $3, $4) RETURNING *',
-      [req.user.id, license_plate, model, color]
-    );
-    res.status(201).json(result.rows[0]);
+    const isAdmin = req.user.role === 'admin';
+    const { rows } = isAdmin
+      ? await VehicleModel.findAllAdmin()
+      : await VehicleModel.findByUser(req.user.id);
+    res.json(rows);
   } catch (err) {
-    if (err.code === '23505') { // violation d'unicité
-      return res.status(400).json({ message: 'Cette plaque existe déjà' });
-    }
-    console.error(err);
-    res.status(500).json({ message: 'Erreur serveur' });
+    console.error('vehicle.getAll:', err.message);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+};
+
+exports.getById = async (req, res) => {
+  try {
+    const { rows } = await VehicleModel.findByUser(req.user.id);
+    const v = rows.find(x => x.id === parseInt(req.params.id));
+    if (!v) return res.status(404).json({ error: 'Véhicule introuvable' });
+    res.json(v);
+  } catch (err) {
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+};
+
+exports.update = async (req, res) => {
+  try {
+    const { rows } = await VehicleModel.update(req.params.id, req.user.id, req.body);
+    if (!rows.length)
+      return res.status(404).json({ error: 'Véhicule introuvable ou non autorisé' });
+    res.json(rows[0]);
+  } catch (err) {
+    console.error('vehicle.update:', err.message);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+};
+
+exports.remove = async (req, res) => {
+  try {
+    await VehicleModel.delete(req.params.id, req.user.id);
+    res.json({ message: 'Véhicule supprimé' });
+  } catch (err) {
+    res.status(500).json({ error: 'Erreur serveur' });
   }
 };

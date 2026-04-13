@@ -7,16 +7,23 @@
     "start": "node src/server.js",
     "dev": "nodemon src/server.js"
   },
-  "keywords": ["parking", "management", "api", "express", "postgresql"],
+  "keywords": [
+    "parking",
+    "management",
+    "api",
+    "express",
+    "postgresql"
+  ],
   "author": "Anis Benahmed",
   "license": "MIT",
   "dependencies": {
-    "express": "^4.18.2",
-    "pg": "^8.11.3",
-    "dotenv": "^16.3.1",
-    "cors": "^2.8.5",
-    "jsonwebtoken": "^9.0.2",
-    "bcrypt": "^5.1.1"
+    "bcrypt": "^5.1.1",
+    "bcryptjs": "^3.0.3",
+    "cors": "^2.8.6",
+    "dotenv": "^16.6.1",
+    "express": "^4.22.1",
+    "jsonwebtoken": "^9.0.3",
+    "pg": "^8.20.0"
   },
   "devDependencies": {
     "nodemon": "^3.0.1"
