@@ -11,7 +11,7 @@ const RATE_COLORS = {
 
 export default function ClientFormV2() {
   const [screen, setScreen]       = useState('start')   // start | form | payment | waiting | approved | rejected
-  const [rates,  setRates]        = useState({})
+  const [rates, setRates] = useState({ standard:5.00, vip:13.99, handicap:6.99, electrique:10.99 })
   const [spots,  setSpots]        = useState([])
   const [loading, setLoading]     = useState(false)
   const [requestId, setRequestId] = useState(null)
@@ -33,7 +33,7 @@ export default function ClientFormV2() {
         data.forEach(r => { rObj[r.spot_type] = parseFloat(r.hourly_rate) })
         setRates(rObj)
       })
-      .catch(() => setRates({ standard:5, vip:17.99, handicap:11.99, electrique:13.99 }))
+      .catch(() => setRates({ standard:5, vip:13.99, handicap:6.99, electrique:10.99 }))
   }, [])
 
   // Charger les places libres quand l'étage change

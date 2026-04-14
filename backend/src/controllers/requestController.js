@@ -2,9 +2,9 @@ const pool = require('../config/db');
 
 const RATES = {
   standard:   5.00,
-  vip:        17.99,
-  handicap:   11.99,
-  electrique: 13.99,
+  vip:        13.99,
+  handicap:   6.99,
+  electrique: 10.99,
 };
 
 /* GET /api/rates — tarifs publics */

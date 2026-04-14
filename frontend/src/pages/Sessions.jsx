@@ -45,12 +45,18 @@ export default function Sessions() {
     setCoLoading(true)
     try {
       const res = await sessionsAPI.sortie(checkoutModal.id)
-      showMsg(`Sortie enregistrée — $${parseFloat(res.data.amount).toFixed(2)} encaissé`)
+      const amount = parseFloat(res.data.amount).toFixed(2)
+      
+      // Message de libération
+      showMsg(`🟢 Place libérée — Étage ${checkoutModal.floor} Place ${checkoutModal.zone}-${String(checkoutModal.spot_number).padStart(2,'0')} est maintenant AVAILABLE ! Montant encaissé: $${amount}`)
       setCheckoutModal(null)
       await fetchSessions()
+      setTimeout(() => navigate('/dashboard'), 3000)
     } catch (e) {
       showMsg(e.response?.data?.error || 'Erreur serveur', 'error')
-    } finally { setCoLoading(false) }
+    } finally {
+      setCoLoading(false)
+    }
   }
 
   const filtered = sessions.filter(s => {

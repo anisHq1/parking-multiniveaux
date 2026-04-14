@@ -1,10 +1,39 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import {
   Chart as ChartJS, CategoryScale, LinearScale, BarElement,
   LineElement, PointElement, Filler, Tooltip, Legend
 } from 'chart.js'
 import { Bar, Line } from 'react-chartjs-2'
 import { dashboardAPI } from '../services/api'
+
+
+const [notification, setNotification] = useState(null)
+const prevOccupied = useRef(0)
+
+useEffect(() => {
+    if (!data) return
+    const current = parseInt(data.spots?.occupied || 0)
+    
+    if (prevOccupied.current !== 0 && prevOccupied.current !== current) {
+      if (current > prevOccupied.current) {
+        // Place occupée
+        const diff = current - prevOccupied.current
+        setNotification({
+          msg: `🔴 ${diff} place(s) occupée(s) — Cette place est maintenant OCCUPIED !`,
+          type: 'occupied'
+        })
+      } else {
+        // Place libérée
+        const diff = prevOccupied.current - current
+        setNotification({
+          msg: `🟢 ${diff} place(s) libérée(s) — Cette place est maintenant AVAILABLE !`,
+          type: 'free'
+        })
+      }
+      setTimeout(() => setNotification(null), 5000)
+    }
+    prevOccupied.current = current
+  }, [data])
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, LineElement, PointElement, Filler, Tooltip, Legend)
 
@@ -85,6 +114,41 @@ export default function Dashboard() {
 
   return (
     <div className="page">
+   {notification && (
+  <div style={{
+    position: 'fixed', top: 20, right: 20, zIndex: 999,
+    padding: '16px 22px',
+    background: notification.type === 'occupied' 
+      ? 'rgba(248,81,73,.95)' 
+      : 'rgba(63,185,80,.95)',
+    color: '#fff', borderRadius: 12,
+    fontSize: 14, fontWeight: 600,
+    boxShadow: '0 4px 24px rgba(0,0,0,.4)',
+    animation: 'slideIn .3s ease',
+    maxWidth: 400,
+    display: 'flex', alignItems: 'center', gap: 10,
+  }}>
+    <span style={{ fontSize: 22 }}>
+      {notification.type === 'occupied' ? '🚗' : '✅'}
+    </span>
+    <div>
+      <div>{notification.msg}</div>
+      <div style={{ fontSize: 11, opacity: .8, marginTop: 4 }}>
+        {new Date().toLocaleTimeString('fr-CA')}
+      </div>
+    </div>
+    <button
+      onClick={() => setNotification(null)}
+      style={{ marginLeft: 'auto', background: 'none', border: 'none', color: '#fff', cursor: 'pointer', fontSize: 16, opacity: .8 }}
+    >✕</button>
+  </div>
+)}
+<style>{`
+  @keyframes slideIn {
+    from { transform: translateX(120px); opacity: 0; }
+    to   { transform: translateX(0);     opacity: 1; }
+  }
+`}</style>
       {/* Header */}
       <div className="page-header">
         <div>
