@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 
-const API = 'http://localhost:5000/api'
+const API = 'https://parking-multiniveaux.onrender.com/api'
 
 const RATE_COLORS = {
   standard:   { bg: 'rgba(88,166,255,.12)',  border: 'rgba(88,166,255,.3)',  color: '#58a6ff',  icon: '🚗' },
